@@ -3,10 +3,11 @@ import os
 
 setup(
     name="gommit",
-    version="0.3.0",
+    version="0.3.1",
     packages=find_packages(),
     install_requires=[
         "openai>=1.0.0",
+        "colorama>=0.4.6",
     ],
     entry_points={
         "console_scripts": [
