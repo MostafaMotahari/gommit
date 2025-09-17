@@ -1,6 +1,10 @@
 import subprocess
 import os
+import sys
+import time
+import threading
 from openai import OpenAI
+from colorama import init, Fore, Style
 
 def get_git_diff():
     """Get the staged git diff from the current directory."""
@@ -14,6 +18,18 @@ def get_git_diff():
         raise RuntimeError(f"Error running git diff: {e.stderr}")
     except FileNotFoundError:
         raise RuntimeError("Git is not installed or not found in PATH.")
+
+def spinner(message="Processing"):
+    """Display a simple progress spinner."""
+    spinner_chars = ['|', '/', '-', '\\']
+    i = 0
+    while getattr(threading.current_thread(), "running", True):
+        sys.stdout.write(f'\r{message} {spinner_chars[i % len(spinner_chars)]}')
+        sys.stdout.flush()
+        time.sleep(0.1)
+        i += 1
+    sys.stdout.write('\r' + ' ' * (len(message) + 2) + '\r')
+    sys.stdout.flush()
 
 def generate_commit_message(diff, api_key, base_url=None, model="gpt-4o-mini", max_tokens=150):
     """Send the staged diff to an OpenAI-compatible API to generate a commit message."""
@@ -30,6 +46,11 @@ def generate_commit_message(diff, api_key, base_url=None, model="gpt-4o-mini", m
         "Generate a commit message for the following git diff:\n\n" + diff
     )
     
+    # Start spinner in a separate thread
+    spinner_thread = threading.Thread(target=spinner, args=("Generating commit message",))
+    spinner_thread.running = True
+    spinner_thread.start()
+    
     try:
         response = client.chat.completions.create(
             model=model,
@@ -40,9 +61,16 @@ def generate_commit_message(diff, api_key, base_url=None, model="gpt-4o-mini", m
         return response.choices[0].message.content.strip()
     except Exception as e:
         raise RuntimeError(f"Error calling API: {str(e)}")
+    finally:
+        # Stop the spinner
+        spinner_thread.running = False
+        spinner_thread.join()
 
 def main():
     """Main function to run the commit message generator."""
+    # Initialize colorama for colored output
+    init()
+    
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise ValueError("OPENAI_API_KEY environment variable not set.")
@@ -53,17 +81,16 @@ def main():
     try:
         diff = get_git_diff()
         commit_msg = generate_commit_message(diff, api_key, base_url, model)
-        print("Generated Commit Message:\n")
-        print(commit_msg)
+        print(f"\nGenerated Commit Message:\n{commit_msg}")
         
-        confirm = input("\nDo you want to commit with this message? (y/n): ").strip().lower()
+        confirm = input(f"\nDo you want to commit with this message? (y/n): ").strip().lower()
         if confirm == 'y':
             subprocess.run(['git', 'commit', '-m', commit_msg], check=True)
-            print("Committed successfully.")
+            print(f"{Fore.GREEN}Committed successfully.{Style.RESET_ALL}")
         else:
-            print("Commit aborted.")
+            print(f"{Fore.RED}Commit aborted.{Style.RESET_ALL}")
     except Exception as e:
-        print(f"Error: {str(e)}")
+        print(f"{Fore.RED}Error: {str(e)}{Style.RESET_ALL}")
 
 if __name__ == "__main__":
     main()

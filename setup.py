@@ -3,7 +3,7 @@ import os
 
 setup(
     name="gommit",
-    version="0.1.0",
+    version="0.3.0",
     packages=find_packages(),
     install_requires=[
         "openai>=1.0.0",
